@@ -17,7 +17,11 @@ from trendradar.ai.prompt_loader import load_prompt_template
 @dataclass
 class AIAnalysisResult:
     """AI 分析结果"""
-    # 新版 5 核心板块
+    # 行业简报核心板块
+    key_takeaways: List[str] = field(default_factory=list)      # 智能重点提炼（最多 3 条）
+    industry_comments: List[str] = field(default_factory=list)  # AI 行业分析锐评（最多 3 条）
+
+    # 兼容旧版 5 核心板块
     core_trends: str = ""                # 核心热点与舆情态势
     sentiment_controversy: str = ""      # 舆论风向与争议
     signals: str = ""                    # 异动与弱信号
@@ -554,6 +558,36 @@ class AIAnalyzer:
         )
         return "\n".join(lines), standalone_count
 
+    def _parse_brief_points(self, value: Any, limit: int = 3) -> List[str]:
+        """解析 AI 返回的简报要点，兼容数组、编号字符串和普通文本"""
+        if value is None:
+            return []
+
+        raw_items: List[str]
+        if isinstance(value, list):
+            raw_items = [str(item) for item in value]
+        elif isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            import re
+            parts = re.split(r"(?:^|\n)\s*(?:\d+[\.、)]|[-•])\s*", text)
+            raw_items = [part for part in parts if part.strip()]
+            if len(raw_items) <= 1:
+                raw_items = [line for line in text.splitlines() if line.strip()]
+        else:
+            raw_items = [str(value)]
+
+        points = []
+        for item in raw_items:
+            point = str(item).strip()
+            if not point:
+                continue
+            points.append(point)
+            if len(points) >= limit:
+                break
+        return points
+
     def _parse_response(self, response: str) -> AIAnalysisResult:
         """解析 AI 响应"""
         result = AIAnalysisResult(raw_response=response)
@@ -622,6 +656,8 @@ class AIAnalyzer:
 
         # 解析成功，提取字段
         try:
+            result.key_takeaways = self._parse_brief_points(data.get("key_takeaways", []))
+            result.industry_comments = self._parse_brief_points(data.get("industry_comments", []))
             result.core_trends = data.get("core_trends", "")
             result.sentiment_controversy = data.get("sentiment_controversy", "")
             result.signals = data.get("signals", "")

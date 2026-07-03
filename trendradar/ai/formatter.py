@@ -15,6 +15,14 @@ def _escape_html(text: str) -> str:
     return html_lib.escape(text) if text else ""
 
 
+def _format_points(points: list) -> str:
+    """格式化最多 3 条行业简报要点"""
+    clean_points = [str(point).strip() for point in (points or []) if str(point).strip()]
+    if not clean_points:
+        return ""
+    return "\n".join(f"{index}. {point}" for index, point in enumerate(clean_points[:3], 1))
+
+
 def _format_list_content(text: str) -> str:
     """
     格式化列表内容，确保序号前有换行
@@ -100,10 +108,15 @@ def _render_ai_analysis_markdown_like(
             return f"ℹ️ {result.error}"
         return f"⚠️ AI 分析失败: {result.error}"
 
-    lines = ["**✨ AI 热点分析**", ""]
+    lines = ["**AI行业分析**", ""]
+
+    industry_comments = _format_points(getattr(result, "industry_comments", []))
+    if industry_comments:
+        lines.extend([industry_comments, ""])
+        return "\n".join(lines)
 
     if result.core_trends:
-        lines.extend(["**核心热点态势**", _format_list_content(result.core_trends), ""])
+        lines.extend(["**核心行业判断**", _format_list_content(result.core_trends), ""])
 
     if result.sentiment_controversy:
         lines.extend(
@@ -157,11 +170,16 @@ def render_ai_analysis_dingtalk(result: AIAnalysisResult) -> str:
             return f"ℹ️ {result.error}"
         return f"⚠️ AI 分析失败: {result.error}"
 
-    lines = ["### ✨ AI 热点分析", ""]
+    lines = ["### AI行业分析", ""]
+
+    industry_comments = _format_points(getattr(result, "industry_comments", []))
+    if industry_comments:
+        lines.extend([industry_comments, ""])
+        return "\n".join(lines)
 
     if result.core_trends:
         lines.extend(
-            ["#### 核心热点态势", _format_list_content(result.core_trends), ""]
+            ["#### 核心行业判断", _format_list_content(result.core_trends), ""]
         )
 
     if result.sentiment_controversy:
@@ -201,10 +219,15 @@ def render_ai_analysis_plain(result: AIAnalysisResult) -> str:
             return result.error
         return f"AI 分析失败: {result.error}"
 
-    lines = ["【✨ AI 热点分析】", ""]
+    lines = ["【AI行业分析】", ""]
+
+    industry_comments = _format_points(getattr(result, "industry_comments", []))
+    if industry_comments:
+        lines.extend([industry_comments, ""])
+        return "\n".join(lines)
 
     if result.core_trends:
-        lines.extend(["[核心热点态势]", _format_list_content(result.core_trends), ""])
+        lines.extend(["[核心行业判断]", _format_list_content(result.core_trends), ""])
 
     if result.sentiment_controversy:
         lines.extend(
@@ -240,10 +263,15 @@ def render_ai_analysis_telegram(result: AIAnalysisResult) -> str:
             return f"ℹ️ {_escape_html(result.error)}"
         return f"⚠️ AI 分析失败: {_escape_html(result.error)}"
 
-    lines = ["<b>✨ AI 热点分析</b>", ""]
+    lines = ["<b>AI行业分析</b>", ""]
+
+    industry_comments = _format_points(getattr(result, "industry_comments", []))
+    if industry_comments:
+        lines.extend([_escape_html(industry_comments), ""])
+        return "\n".join(lines)
 
     if result.core_trends:
-        lines.extend(["<b>核心热点态势</b>", _escape_html(_format_list_content(result.core_trends)), ""])
+        lines.extend(["<b>核心行业判断</b>", _escape_html(_format_list_content(result.core_trends)), ""])
 
     if result.sentiment_controversy:
         lines.extend(["<b>舆论风向争议</b>", _escape_html(_format_list_content(result.sentiment_controversy)), ""])
@@ -301,21 +329,30 @@ def render_ai_analysis_html_rich(result: AIAnalysisResult) -> str:
     ai_html = """
                 <div class="ai-section">
                     <div class="ai-section-header">
-                        <div class="ai-section-title">✨ AI 热点分析</div>
+                        <div class="ai-section-title">AI行业分析</div>
                         <span class="ai-section-badge">AI</span>
                     </div>
                     <div class="ai-blocks-grid">"""
 
-    if result.core_trends:
+    industry_comments = _format_points(getattr(result, "industry_comments", []))
+    if industry_comments:
+        comments_html = _escape_html(industry_comments).replace("\n", "<br>")
+        ai_html += f"""
+                    <div class="ai-block">
+                        <div class="ai-block-title">AI行业锐评</div>
+                        <div class="ai-block-content">{comments_html}</div>
+                    </div>"""
+
+    elif result.core_trends:
         content = _format_list_content(result.core_trends)
         content_html = _escape_html(content).replace("\n", "<br>")
         ai_html += f"""
                     <div class="ai-block">
-                        <div class="ai-block-title">核心热点态势</div>
+                        <div class="ai-block-title">核心行业判断</div>
                         <div class="ai-block-content">{content_html}</div>
                     </div>"""
 
-    if result.sentiment_controversy:
+    if not industry_comments and result.sentiment_controversy:
         content = _format_list_content(result.sentiment_controversy)
         content_html = _escape_html(content).replace("\n", "<br>")
         ai_html += f"""
@@ -324,7 +361,7 @@ def render_ai_analysis_html_rich(result: AIAnalysisResult) -> str:
                         <div class="ai-block-content">{content_html}</div>
                     </div>"""
 
-    if result.signals:
+    if not industry_comments and result.signals:
         content = _format_list_content(result.signals)
         content_html = _escape_html(content).replace("\n", "<br>")
         ai_html += f"""
@@ -333,7 +370,7 @@ def render_ai_analysis_html_rich(result: AIAnalysisResult) -> str:
                         <div class="ai-block-content">{content_html}</div>
                     </div>"""
 
-    if result.rss_insights:
+    if not industry_comments and result.rss_insights:
         content = _format_list_content(result.rss_insights)
         content_html = _escape_html(content).replace("\n", "<br>")
         ai_html += f"""
@@ -342,7 +379,7 @@ def render_ai_analysis_html_rich(result: AIAnalysisResult) -> str:
                         <div class="ai-block-content">{content_html}</div>
                     </div>"""
 
-    if result.outlook_strategy:
+    if not industry_comments and result.outlook_strategy:
         content = _format_list_content(result.outlook_strategy)
         content_html = _escape_html(content).replace("\n", "<br>")
         ai_html += f"""

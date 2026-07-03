@@ -49,6 +49,7 @@ def _extract_ai_stats(ai_analysis) -> Optional[Dict]:
         "ai_mode": getattr(ai_analysis, "ai_mode", ""),
         "include_rss": getattr(ai_analysis, "include_rss", True),
         "include_standalone": getattr(ai_analysis, "include_standalone", False),
+        "key_takeaways": getattr(ai_analysis, "key_takeaways", []),
     }
 
 
