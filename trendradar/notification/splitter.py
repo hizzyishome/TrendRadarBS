@@ -138,7 +138,7 @@ def _format_brand_header(format_type: str, title: str) -> str:
         return f"*{title}*"
     if format_type == "telegram":
         return title
-    return f"**{title}**"
+    return f"## {title}"
 
 
 def _format_section_title(format_type: str, title: str) -> str:
@@ -250,7 +250,7 @@ def split_content_into_batches(
     else:
         b_s, b_e = "**", "**"
 
-    brand_title = f"兰剑客&行业要问智能体|{now.strftime('%Y-%m-%d-%H')}"
+    brand_title = f"兰剑客&行业要闻智能体|{now.strftime('%Y-%m-%d-%H:%M')}"
     base_header = f"{_format_brand_header(format_type, brand_title)}\n\n"
 
     base_footer = ""

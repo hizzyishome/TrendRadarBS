@@ -8,6 +8,11 @@
 from typing import List
 
 
+def get_batch_marker(format_type: str, batch_num: int, total_batches: int) -> str:
+    """生成追加到品牌标题后的简短批次标记"""
+    return f"[{batch_num}/{total_batches}]"
+
+
 def get_batch_header(format_type: str, batch_num: int, total_batches: int) -> str:
     """根据 format_type 生成对应格式的批次头部
 
@@ -201,21 +206,27 @@ def add_batch_headers(
         else:
             expanded.append(content)
 
-    # 第二遍：添加头部
-    if len(expanded) <= 1:
-        return expanded
-
+    # 第二遍：把简短批次标记跟在品牌标题行后面
     total = len(expanded)
     result = []
     for i, content in enumerate(expanded, 1):
-        header = get_batch_header(format_type, i, total)
-        header_size = len(header.encode("utf-8"))
-        max_content_size = max_bytes - header_size
+        marker = get_batch_marker(format_type, i, total)
+        lines = content.split("\n", 1)
+        if len(lines) == 2 and "兰剑客&行业要问智能体|" in lines[0]:
+            content_with_marker = f"{lines[0]} {marker}\n{lines[1]}"
+        else:
+            content_with_marker = get_batch_header(format_type, i, total) + content
 
-        if len(content.encode("utf-8")) > max_content_size:
-            # 仍超限（极端情况：单行过长），行边界截断
+        if len(content_with_marker.encode("utf-8")) > max_bytes:
+            extra_size = len(content_with_marker.encode("utf-8")) - len(content.encode("utf-8"))
+            max_content_size = max_bytes - extra_size
             content = truncate_preserving_footer(content, max_content_size)
+            lines = content.split("\n", 1)
+            if len(lines) == 2 and "兰剑客&行业要问智能体|" in lines[0]:
+                content_with_marker = f"{lines[0]} {marker}\n{lines[1]}"
+            else:
+                content_with_marker = get_batch_header(format_type, i, total) + content
 
-        result.append(header + content)
+        result.append(content_with_marker)
 
     return result
