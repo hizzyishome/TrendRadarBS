@@ -9,6 +9,7 @@ import time
 import random
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
+from urllib.parse import quote_plus, urlparse
 
 import requests
 
@@ -84,6 +85,61 @@ class RSSFetcher:
 
         return session
 
+    def _is_google_news_url(self, url: str) -> bool:
+        """判断是否为 Google News 跳转链接"""
+        try:
+            hostname = (urlparse(url).hostname or "").lower()
+            return hostname.endswith("news.google.com") or hostname.endswith("google.com") and "/articles/" in url
+        except Exception:
+            return False
+
+    def _resolve_google_news_url(self, url: str) -> str:
+        """尝试解析 Google News 条目的源头地址，失败时返回空字符串"""
+        try:
+            response = self.session.get(url, timeout=self.timeout, allow_redirects=True)
+            response.raise_for_status()
+            final_url = response.url
+            if final_url and not self._is_google_news_url(final_url):
+                return final_url
+        except Exception:
+            pass
+        return ""
+
+    def _search_baidu_news_url(self, title: str) -> str:
+        """用百度新闻按标题搜索兜底，能搜到则返回第一条结果链接"""
+        if not title:
+            return ""
+        search_url = f"https://news.baidu.com/ns?word={quote_plus(title)}&tn=news&from=news&cl=2&rn=10&ct=0"
+        try:
+            response = self.session.get(search_url, timeout=self.timeout)
+            response.raise_for_status()
+            # 百度新闻搜索结果页中常见链接形态：<a href=\"https://...\" target=\"_blank\" ...>
+            import re
+            for match in re.finditer(r"<a[^>]+href=[\"'](https?://[^\"']+)[\"']", response.text, re.I):
+                candidate = match.group(1)
+                host = (urlparse(candidate).hostname or "").lower()
+                if "baidu.com" in host:
+                    continue
+                return candidate
+        except Exception:
+            pass
+        return ""
+
+    def _normalize_google_news_item_url(self, title: str, url: str) -> str:
+        """Google News 条目链接可用性增强：源头地址 > 百度搜索结果 > Google 默认链接"""
+        if not self._is_google_news_url(url):
+            return url
+
+        source_url = self._resolve_google_news_url(url)
+        if source_url:
+            return source_url
+
+        baidu_url = self._search_baidu_news_url(title)
+        if baidu_url:
+            return baidu_url
+
+        return url
+
     def fetch_feed(self, feed: RSSFeedConfig) -> Tuple[List[RSSItem], Optional[str]]:
         """
         抓取单个 RSS 源
@@ -110,12 +166,13 @@ class RSSFetcher:
             items = []
 
             for parsed in parsed_items:
+                item_url = self._normalize_google_news_item_url(parsed.title, parsed.url)
                 item = RSSItem(
                     title=parsed.title,
                     feed_id=feed.id,
                     feed_name=feed.name,
-                    url=parsed.url,
-                    guid=parsed.guid or "",
+                    url=item_url,
+                    guid=parsed.guid or item_url,
                     published_at=parsed.published_at or "",
                     summary=parsed.summary or "",
                     author=parsed.author or "",
